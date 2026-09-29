@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
-import { registerHackLanguage, HACK_LANGUAGE_ID } from './editor/hackLanguage';
+import { registerHackLanguage } from './editor/hackLanguage';
+import { assembleHackSource } from './core/assembler';
+import './App.css';
 
 const INITIAL_CODE = `// Example Hack Assembly Program
 @2
@@ -14,49 +16,59 @@ M=D
 0;JMP
 `;
 
-export default function App() {
-  const [code, setCode] = useState(INITIAL_CODE);
+export function App() {
+  const [sourceCode, setSourceCode] = useState<string>(INITIAL_CODE);
 
-  // Registers 'hack-asm' Monarch grammar right before the editor mounts
-  const handleEditorWillMount = (monaco: typeof import('monaco-editor')) => {
-    registerHackLanguage(monaco);
-  };
+  const { binaryLines, diagnostics } = useMemo(() => {
+    return assembleHackSource(sourceCode);
+  }, [sourceCode]);
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#1e1e1e', color: '#fff' }}>
-      <header style={{ padding: '12px 20px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600 }}>Hack Assembly IDE & Linter</h2>
-        <span style={{ fontSize: '0.85rem', color: '#888' }}>CS207 Course Project</span>
+    <div className="ide-container">
+      <header className="ide-header">
+        <h1>Hack Assembly IDE & Linter</h1>
+        <span className="course-tag">CS207 Course Project</span>
       </header>
-
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Editor Pane (Left) */}
-        <div style={{ flex: 1, borderRight: '1px solid #333' }}>
+      
+      <main className="ide-workspace">
+        <div className="editor-pane">
           <Editor
             height="100%"
-            defaultLanguage={HACK_LANGUAGE_ID}
-            theme="vs-dark"
-            value={code}
-            beforeMount={handleEditorWillMount}
-            onChange={(val) => setCode(val || '')}
+            defaultLanguage="hack"
+            theme="hack-dark"
+            value={sourceCode}
+            onChange={(val) => setSourceCode(val || '')}
+            beforeMount={(monaco) => registerHackLanguage(monaco)}
             options={{
-              minimap: { enabled: false },
               fontSize: 14,
-              lineNumbers: 'on',
+              fontFamily: "'Fira Code', monospace",
+              minimap: { enabled: false },
               scrollBeyondLastLine: false,
               automaticLayout: true,
             }}
           />
         </div>
 
-        {/* Machine Code Preview (Right) */}
-        <div style={{ width: '380px', padding: '16px', backgroundColor: '#181818', overflowY: 'auto' }}>
-          <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#ccc' }}>Machine Code Preview (.hack)</h3>
-          <div style={{ padding: '12px', backgroundColor: '#242424', borderRadius: '4px', fontFamily: 'monospace', fontSize: '0.9rem', color: '#4ec9b0' }}>
-            // Compiled 16-bit binary lines will appear here in Week 2
-          </div>
+        <div className="preview-pane">
+          <h3>Machine Code Preview (.hack)</h3>
+          {diagnostics.length > 0 ? (
+            <div className="diagnostics-panel" style={{ color: '#ff6b6b', padding: '10px' }}>
+              <h4>Assembly Errors:</h4>
+              <ul>
+                {diagnostics.map((err, idx) => (
+                  <li key={idx}>Line {err.lineNumber}: {err.message}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <pre className="binary-output" style={{ padding: '10px', color: '#68d391', fontFamily: 'monospace' }}>
+              {binaryLines.length > 0 ? binaryLines.join('\n') : '// No executable instructions'}
+            </pre>
+          )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
+
+export default App;
