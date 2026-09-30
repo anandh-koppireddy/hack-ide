@@ -1,5 +1,6 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
+import type * as MonacoType from 'monaco-editor';
 import { registerHackLanguage } from './editor/hackLanguage';
 import { assembleHackSource } from './core/assembler';
 import './App.css';
@@ -21,9 +22,35 @@ export function App() {
   const [currentFileName, setCurrentFileName] = useState<string>('program.asm');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // References to Monaco editor and API
+  const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<typeof MonacoType | null>(null);
+
   const { binaryLines, diagnostics } = useMemo(() => {
     return assembleHackSource(sourceCode);
   }, [sourceCode]);
+
+  // Synchronize diagnostics with Monaco In-Editor Markers (Squigglies & Tooltips)
+  useEffect(() => {
+    if (!monacoRef.current || !editorRef.current) return;
+
+    const model = editorRef.current.getModel();
+    if (!model) return;
+
+    const markers: MonacoType.editor.IMarkerData[] = diagnostics.map((diag) => ({
+      severity:
+        diag.severity === 'warning'
+          ? monacoRef.current!.MarkerSeverity.Warning
+          : monacoRef.current!.MarkerSeverity.Error,
+      message: diag.message,
+      startLineNumber: diag.lineNumber,
+      startColumn: diag.columnStart || 1,
+      endLineNumber: diag.lineNumber,
+      endColumn: diag.columnEnd || model.getLineMaxColumn(diag.lineNumber),
+    }));
+
+    monacoRef.current.editor.setModelMarkers(model, 'hack-linter', markers);
+  }, [diagnostics]);
 
   const handleOpenFileClick = () => {
     fileInputRef.current?.click();
@@ -104,7 +131,9 @@ export function App() {
             value={sourceCode}
             onChange={(val) => setSourceCode(val || '')}
             beforeMount={(monaco) => registerHackLanguage(monaco)}
-            onMount={(_editor, monaco) => {
+            onMount={(editor, monaco) => {
+              editorRef.current = editor;
+              monacoRef.current = monaco;
               monaco.editor.setTheme('hack-dark');
             }}
             options={{
@@ -113,6 +142,8 @@ export function App() {
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               automaticLayout: true,
+              glyphMargin: true,
+              lightbulb: { enabled: 'off' as any },
             }}
           />
         </div>
@@ -121,11 +152,11 @@ export function App() {
           <h3>Machine Code Preview (.hack)</h3>
           {diagnostics.length > 0 ? (
             <div className="diagnostics-panel">
-              <h4>Assembly Errors:</h4>
+              <h4>Assembly Errors ({diagnostics.length}):</h4>
               <ul>
                 {diagnostics.map((err, idx) => (
                   <li key={idx}>
-                    Line {err.lineNumber}: {err.message}
+                    <strong>Line {err.lineNumber}:</strong> {err.message}
                   </li>
                 ))}
               </ul>
