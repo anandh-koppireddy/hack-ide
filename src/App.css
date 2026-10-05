@@ -58,6 +58,21 @@ html, body, #root {
   gap: 12px;
 }
 
+.select-dropdown {
+  background-color: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.select-dropdown:hover {
+  background-color: #3e3e3e;
+}
+
 .btn {
   padding: 6px 14px;
   font-size: 0.8rem;
@@ -125,21 +140,54 @@ html, body, #root {
   overflow-y: auto;
 }
 
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .preview-pane h3 {
   font-size: 0.9rem;
   font-weight: 500;
-  margin-bottom: 12px;
   color: #9cdcfe;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.binary-output {
+.instruction-count {
+  font-size: 0.75rem;
+  color: #858585;
+  font-family: monospace;
+}
+
+.binary-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.binary-row {
+  display: flex;
+  gap: 16px;
   font-family: 'Fira Code', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.6;
+}
+
+.rom-address {
+  color: #5c6370;
+  user-select: none;
+  font-size: 12px;
+}
+
+.binary-code {
   color: #4ec9b0;
-  white-space: pre-wrap;
+}
+
+.empty-message {
+  font-family: monospace;
+  color: #858585;
 }
 
 .diagnostics-panel {
