@@ -3,26 +3,15 @@ import Editor from '@monaco-editor/react';
 import type * as MonacoType from 'monaco-editor';
 import { registerHackLanguage } from './editor/hackLanguage';
 import { assembleHackSource } from './core/assembler';
+import { PRELOADED_EXAMPLES } from './core/examples';
 import './App.css';
 
-const INITIAL_CODE = `// Example Hack Assembly Program
-@2
-D=A
-@3
-D=D+A
-@0
-M=D
-(INFINITE_LOOP)
-@INFINITE_LOOP
-0;JMP
-`;
-
 export function App() {
-  const [sourceCode, setSourceCode] = useState<string>(INITIAL_CODE);
-  const [currentFileName, setCurrentFileName] = useState<string>('program.asm');
+  const [sourceCode, setSourceCode] = useState<string>(PRELOADED_EXAMPLES[0].code);
+  const [currentFileName, setCurrentFileName] = useState<string>(PRELOADED_EXAMPLES[0].filename);
+  const [selectedExampleId, setSelectedExampleId] = useState<string>('default');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // References to Monaco editor and API
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof MonacoType | null>(null);
 
@@ -30,7 +19,7 @@ export function App() {
     return assembleHackSource(sourceCode);
   }, [sourceCode]);
 
-  // Synchronize diagnostics with Monaco In-Editor Markers (Squigglies & Tooltips)
+  // Synchronize diagnostics with Monaco In-Editor Markers
   useEffect(() => {
     if (!monacoRef.current || !editorRef.current) return;
 
@@ -52,6 +41,16 @@ export function App() {
     monacoRef.current.editor.setModelMarkers(model, 'hack-linter', markers);
   }, [diagnostics]);
 
+  const handleSelectExample = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = e.target.value;
+    setSelectedExampleId(selectedId);
+    const example = PRELOADED_EXAMPLES.find((ex) => ex.id === selectedId);
+    if (example) {
+      setSourceCode(example.code);
+      setCurrentFileName(example.filename);
+    }
+  };
+
   const handleOpenFileClick = () => {
     fileInputRef.current?.click();
   };
@@ -61,6 +60,7 @@ export function App() {
     if (!file) return;
 
     setCurrentFileName(file.name);
+    setSelectedExampleId('custom');
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
@@ -93,6 +93,24 @@ export function App() {
         <div className="header-left">
           <h1>Hack Assembly IDE & Linter</h1>
           <span className="file-badge">{currentFileName}</span>
+
+          {/* Preloaded Examples Dropdown */}
+          <div className="dropdown-container">
+            <select
+              className="select-dropdown"
+              value={selectedExampleId}
+              onChange={handleSelectExample}
+            >
+              {PRELOADED_EXAMPLES.map((ex) => (
+                <option key={ex.id} value={ex.id}>
+                  {ex.name}
+                </option>
+              ))}
+              {selectedExampleId === 'custom' && (
+                <option value="custom">Custom Uploaded File</option>
+              )}
+            </select>
+          </div>
         </div>
 
         <div className="header-actions">
@@ -129,7 +147,12 @@ export function App() {
             language="hack"
             theme="hack-dark"
             value={sourceCode}
-            onChange={(val) => setSourceCode(val || '')}
+            onChange={(val) => {
+              setSourceCode(val || '');
+              if (selectedExampleId !== 'custom') {
+                setSelectedExampleId('custom');
+              }
+            }}
             beforeMount={(monaco) => registerHackLanguage(monaco)}
             onMount={(editor, monaco) => {
               editorRef.current = editor;
@@ -143,13 +166,18 @@ export function App() {
               scrollBeyondLastLine: false,
               automaticLayout: true,
               glyphMargin: true,
-              lightbulb: { enabled: 'off' as any },
             }}
           />
         </div>
 
         <div className="preview-pane">
-          <h3>Machine Code Preview (.hack)</h3>
+          <div className="preview-header">
+            <h3>Machine Code Preview (.hack)</h3>
+            <span className="instruction-count">
+              {binaryLines.length} {binaryLines.length === 1 ? 'Word' : 'Words'}
+            </span>
+          </div>
+
           {diagnostics.length > 0 ? (
             <div className="diagnostics-panel">
               <h4>Assembly Errors ({diagnostics.length}):</h4>
@@ -162,9 +190,20 @@ export function App() {
               </ul>
             </div>
           ) : (
-            <pre className="binary-output">
-              {binaryLines.length > 0 ? binaryLines.join('\n') : '// No executable instructions'}
-            </pre>
+            <div className="binary-table">
+              {binaryLines.length > 0 ? (
+                binaryLines.map((bin, idx) => (
+                  <div key={idx} className="binary-row">
+                    <span className="rom-address">
+                      ROM[{idx.toString().padStart(4, '0')}]
+                    </span>
+                    <span className="binary-code">{bin}</span>
+                  </div>
+                ))
+              ) : (
+                <span className="empty-message">// No executable instructions</span>
+              )}
+            </div>
           )}
         </div>
       </main>
