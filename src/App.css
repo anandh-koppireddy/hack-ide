@@ -212,3 +212,79 @@ html, body, #root {
   font-size: 0.85rem;
   margin-bottom: 4px;
 }
+
+/* Symbol Table Inspector Drawer Styles */
+.symbol-drawer {
+  width: 320px;
+  background-color: #252526;
+  border-left: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 54px);
+  z-index: 10;
+}
+
+.drawer-header {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #333;
+}
+
+.drawer-header h3 {
+  font-size: 0.9rem;
+  color: #fff;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  color: #fff;
+}
+
+.drawer-content {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.symbol-section h4 {
+  font-size: 0.8rem;
+  color: #9cdcfe;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.symbol-section table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-family: monospace;
+}
+
+.symbol-section th, .symbol-section td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid #333;
+  color: #d4d4d4;
+}
+
+.symbol-section th {
+  color: #858585;
+  font-weight: 500;
+}
+
+.empty-sub {
+  font-size: 0.8rem;
+  color: #666;
+  font-style: italic;
+}
