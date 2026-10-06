@@ -6,6 +6,16 @@ import { assembleHackSource } from './core/assembler';
 import { PRELOADED_EXAMPLES } from './core/examples';
 import './App.css';
 
+// Helper function to completely remove all blank lines and trim whitespace
+const normalizeAssemblyCode = (rawText: string): string => {
+  return rawText
+    .replace(/\r\n/g, '\n') // Normalize Windows line endings to Unix
+    .split('\n')
+    .map((line) => line.trim()) // Trim leading and trailing spaces on every line
+    .filter((line) => line !== '') // Remove ALL empty/blank lines completely
+    .join('\n');
+};
+
 export function App() {
   const [sourceCode, setSourceCode] = useState<string>(PRELOADED_EXAMPLES[0].code);
   const [currentFileName, setCurrentFileName] = useState<string>(PRELOADED_EXAMPLES[0].filename);
@@ -65,7 +75,9 @@ export function App() {
     reader.onload = (event) => {
       const content = event.target?.result as string;
       if (content !== undefined) {
-        setSourceCode(content);
+        // Clean and normalize the loaded file contents automatically
+        const cleanedCode = normalizeAssemblyCode(content);
+        setSourceCode(cleanedCode);
       }
     };
     reader.readAsText(file);
