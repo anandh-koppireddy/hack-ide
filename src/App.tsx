@@ -8,11 +8,12 @@ import { VirtualScreen } from './components/VirtualScreen';
 import { CpuDebugger } from './components/CpuDebugger';
 import { stepCpu, createInitialCpuState, type CpuState } from './core/cpu';
 import { SCREEN_START_ADDR, SCREEN_END_ADDR } from './core/screen';
+import { KBD_ADDR, getHackKeyCode } from './core/keyboard';
 import './App.css';
 
 const HACK_ROM_CAPACITY = 32768;
 const HACK_RAM_CAPACITY = 32768;
-const CYCLES_PER_FRAME = 1500; // Batch cycles for real-time responsiveness
+const CYCLES_PER_FRAME = 1500;
 
 const normalizeAssemblyCode = (rawText: string): string => {
   return rawText
@@ -222,16 +223,56 @@ export function App() {
     };
   }, [isRunning, binaryLines]);
 
-  // Keyboard shortcut Ctrl+S / Cmd+S
+  // Keyboard Event Listener for RAM[24576]
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Export shortcut
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         handleDownloadHack();
+        return;
+      }
+
+      // Ignore when user is actively editing text in inputs or Monaco
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      const isMonaco = document.activeElement?.closest('.monaco-editor');
+      if (activeTag === 'input' || activeTag === 'textarea' || isMonaco) {
+        return;
+      }
+
+      const code = getHackKeyCode(e);
+      if (code !== 0) {
+        setRam((prev) => {
+          if (prev[KBD_ADDR] === code) return prev;
+          const next = new Int16Array(prev);
+          next[KBD_ADDR] = code;
+          return next;
+        });
       }
     };
+
+    const handleKeyUp = () => {
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      const isMonaco = document.activeElement?.closest('.monaco-editor');
+      if (activeTag === 'input' || activeTag === 'textarea' || isMonaco) {
+        return;
+      }
+
+      setRam((prev) => {
+        if (prev[KBD_ADDR] === 0) return prev;
+        const next = new Int16Array(prev);
+        next[KBD_ADDR] = 0;
+        return next;
+      });
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, [handleDownloadHack]);
 
   const romPercentage = ((binaryLines.length / HACK_ROM_CAPACITY) * 100).toFixed(2);
@@ -386,7 +427,7 @@ export function App() {
             </div>
           )}
 
-          {/* CPU Debugger Registers & Controls */}
+          {/* CPU Debugger */}
           <CpuDebugger
             cpuState={cpuState}
             ram={ram}
@@ -397,7 +438,7 @@ export function App() {
             disabled={diagnostics.length > 0 || binaryLines.length === 0}
           />
 
-          {/* Virtual Screen */}
+          {/* Virtual Screen with Keyboard status */}
           <VirtualScreen ram={ram} onClearScreen={handleClearScreen} />
         </div>
 
