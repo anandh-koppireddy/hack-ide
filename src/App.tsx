@@ -5,13 +5,15 @@ import { registerHackLanguage } from './editor/hackLanguage';
 import { assembleHackSource } from './core/assembler';
 import { PRELOADED_EXAMPLES } from './core/examples';
 import { VirtualScreen } from './components/VirtualScreen';
+import { CpuDebugger } from './components/CpuDebugger';
+import { stepCpu, createInitialCpuState, type CpuState } from './core/cpu';
 import { SCREEN_START_ADDR, SCREEN_END_ADDR } from './core/screen';
 import './App.css';
 
 const HACK_ROM_CAPACITY = 32768;
 const HACK_RAM_CAPACITY = 32768;
+const CYCLES_PER_FRAME = 1500; // Batch cycles for real-time responsiveness
 
-// Helper function to normalize loaded assembly code
 const normalizeAssemblyCode = (rawText: string): string => {
   return rawText
     .replace(/\r\n/g, '\n')
@@ -21,7 +23,6 @@ const normalizeAssemblyCode = (rawText: string): string => {
     .join('\n');
 };
 
-// Helper function to categorize symbols for the drawer
 const categorizeSymbols = (symbolTable: Record<string, number>) => {
   const predefined: { name: string; address: number }[] = [];
   const labels: { name: string; address: number }[] = [];
@@ -54,12 +55,15 @@ export function App() {
   const [isSymbolTableOpen, setIsSymbolTableOpen] = useState<boolean>(false);
   const [copyStatus, setCopyStatus] = useState<string>('Copy Binary');
 
-  // 32K 16-bit RAM buffer (including Screen at 16384-24575 and Keyboard at 24576)
+  // Emulator State
   const [ram, setRam] = useState<Int16Array>(() => new Int16Array(HACK_RAM_CAPACITY));
-  
+  const [cpuState, setCpuState] = useState<CpuState>(createInitialCpuState);
+  const [isRunning, setIsRunning] = useState<boolean>(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof MonacoType | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   const { binaryLines, diagnostics, symbolTable } = useMemo(() => {
     return assembleHackSource(sourceCode);
@@ -69,7 +73,7 @@ export function App() {
     return categorizeSymbols(symbolTable || {});
   }, [symbolTable]);
 
-  // Synchronize diagnostics with Monaco In-Editor Markers
+  // Synchronize Monaco Linter Markers
   useEffect(() => {
     if (!monacoRef.current || !editorRef.current) return;
 
@@ -98,6 +102,7 @@ export function App() {
     if (example) {
       setSourceCode(example.code);
       setCurrentFileName(example.filename);
+      handleResetCpu();
     }
   };
 
@@ -117,6 +122,7 @@ export function App() {
       if (content !== undefined) {
         const cleanedCode = normalizeAssemblyCode(content);
         setSourceCode(cleanedCode);
+        handleResetCpu();
       }
     };
     reader.readAsText(file);
@@ -152,15 +158,71 @@ export function App() {
 
   const handleClearScreen = () => {
     setRam((prevRam) => {
-      const updatedRam = new Int16Array(prevRam);
+      const updated = new Int16Array(prevRam);
       for (let addr = SCREEN_START_ADDR; addr <= SCREEN_END_ADDR; addr++) {
-        updatedRam[addr] = 0;
+        updated[addr] = 0;
       }
-      return updatedRam;
+      return updated;
     });
   };
 
-  // Keyboard shortcut Ctrl+S / Cmd+S to export .hack
+  const handleStepCpu = () => {
+    if (binaryLines.length === 0 || diagnostics.length > 0) return;
+    setCpuState((prevCpu) => {
+      const updatedRam = new Int16Array(ram);
+      const nextCpu = stepCpu(prevCpu, binaryLines, updatedRam);
+      setRam(updatedRam);
+      return nextCpu;
+    });
+  };
+
+  const handleResetCpu = () => {
+    setIsRunning(false);
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    setCpuState(createInitialCpuState());
+  };
+
+  const handleRunToggle = () => {
+    setIsRunning((prev) => !prev);
+  };
+
+  // Continuous run loop
+  useEffect(() => {
+    if (!isRunning) return;
+
+    let localCpu = cpuState;
+    const localRam = new Int16Array(ram);
+
+    const runBatch = () => {
+      for (let i = 0; i < CYCLES_PER_FRAME; i++) {
+        if (localCpu.halted) {
+          setIsRunning(false);
+          break;
+        }
+        localCpu = stepCpu(localCpu, binaryLines, localRam);
+      }
+
+      setCpuState(localCpu);
+      setRam(new Int16Array(localRam));
+
+      if (!localCpu.halted) {
+        animationFrameRef.current = requestAnimationFrame(runBatch);
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(runBatch);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isRunning, binaryLines]);
+
+  // Keyboard shortcut Ctrl+S / Cmd+S
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -254,6 +316,7 @@ export function App() {
               if (selectedExampleId !== 'custom') {
                 setSelectedExampleId('custom');
               }
+              handleResetCpu();
             }}
             beforeMount={(monaco) => registerHackLanguage(monaco)}
             onMount={(editor, monaco) => {
@@ -307,7 +370,10 @@ export function App() {
             <div className="binary-table">
               {binaryLines.length > 0 ? (
                 binaryLines.map((bin, idx) => (
-                  <div key={idx} className="binary-row">
+                  <div
+                    key={idx}
+                    className={`binary-row ${cpuState.pc === idx ? 'active-pc-row' : ''}`}
+                  >
                     <span className="rom-address">
                       ROM[{idx.toString().padStart(4, '0')}]
                     </span>
@@ -320,7 +386,18 @@ export function App() {
             </div>
           )}
 
-          {/* Virtual Screen Component placed beneath the binary table */}
+          {/* CPU Debugger Registers & Controls */}
+          <CpuDebugger
+            cpuState={cpuState}
+            ram={ram}
+            isRunning={isRunning}
+            onStep={handleStepCpu}
+            onRunToggle={handleRunToggle}
+            onReset={handleResetCpu}
+            disabled={diagnostics.length > 0 || binaryLines.length === 0}
+          />
+
+          {/* Virtual Screen */}
           <VirtualScreen ram={ram} onClearScreen={handleClearScreen} />
         </div>
 

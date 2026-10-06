@@ -328,3 +328,19 @@ html, body, #root {
   background-color: #4ec9b0;
   transition: width 0.2s ease-in-out;
 }
+
+/* Active PC highlight in the binary preview table */
+.binary-row.active-pc-row {
+  background-color: #264f78 !important;
+  border-left: 3px solid #569cd6;
+}
+
+.binary-row.active-pc-row .rom-address {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.binary-row.active-pc-row .binary-code {
+  color: #9cdcfe;
+  font-weight: bold;
+}
