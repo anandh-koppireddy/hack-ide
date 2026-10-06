@@ -6,28 +6,59 @@ import { assembleHackSource } from './core/assembler';
 import { PRELOADED_EXAMPLES } from './core/examples';
 import './App.css';
 
-// Helper function to completely remove all blank lines and trim whitespace
+// Helper function to normalize loaded assembly code
 const normalizeAssemblyCode = (rawText: string): string => {
   return rawText
-    .replace(/\r\n/g, '\n') // Normalize Windows line endings to Unix
+    .replace(/\r\n/g, '\n')
     .split('\n')
-    .map((line) => line.trim()) // Trim leading and trailing spaces on every line
-    .filter((line) => line !== '') // Remove ALL empty/blank lines completely
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
     .join('\n');
+};
+
+// Helper function to categorize symbols for the drawer
+const categorizeSymbols = (symbolTable: Record<string, number>) => {
+  const predefined: { name: string; address: number }[] = [];
+  const labels: { name: string; address: number }[] = [];
+  const variables: { name: string; address: number }[] = [];
+
+  const predefinedNames = new Set([
+    'SP', 'LCL', 'ARG', 'THIS', 'THAT',
+    'SCREEN', 'KBD',
+    'R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7',
+    'R8', 'R9', 'R10', 'R11', 'R12', 'R13', 'R14', 'R15'
+  ]);
+
+  Object.entries(symbolTable || {}).forEach(([name, address]) => {
+    if (predefinedNames.has(name)) {
+      predefined.push({ name, address });
+    } else if (address >= 16) {
+      variables.push({ name, address });
+    } else {
+      labels.push({ name, address });
+    }
+  });
+
+  return { predefined, labels, variables };
 };
 
 export function App() {
   const [sourceCode, setSourceCode] = useState<string>(PRELOADED_EXAMPLES[0].code);
   const [currentFileName, setCurrentFileName] = useState<string>(PRELOADED_EXAMPLES[0].filename);
   const [selectedExampleId, setSelectedExampleId] = useState<string>('default');
+  const [isSymbolTableOpen, setIsSymbolTableOpen] = useState<boolean>(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof MonacoType | null>(null);
 
-  const { binaryLines, diagnostics } = useMemo(() => {
+  const { binaryLines, diagnostics, symbolTable } = useMemo(() => {
     return assembleHackSource(sourceCode);
   }, [sourceCode]);
+
+  const categorized = useMemo(() => {
+    return categorizeSymbols(symbolTable || {});
+  }, [symbolTable]);
 
   // Synchronize diagnostics with Monaco In-Editor Markers
   useEffect(() => {
@@ -75,7 +106,6 @@ export function App() {
     reader.onload = (event) => {
       const content = event.target?.result as string;
       if (content !== undefined) {
-        // Clean and normalize the loaded file contents automatically
         const cleanedCode = normalizeAssemblyCode(content);
         setSourceCode(cleanedCode);
       }
@@ -106,7 +136,6 @@ export function App() {
           <h1>Hack Assembly IDE & Linter</h1>
           <span className="file-badge">{currentFileName}</span>
 
-          {/* Preloaded Examples Dropdown */}
           <div className="dropdown-container">
             <select
               className="select-dropdown"
@@ -136,6 +165,13 @@ export function App() {
 
           <button className="btn btn-secondary" onClick={handleOpenFileClick}>
             Open File (.asm)
+          </button>
+
+          <button
+            className="btn btn-secondary"
+            onClick={() => setIsSymbolTableOpen(!isSymbolTableOpen)}
+          >
+            {isSymbolTableOpen ? 'Close Symbols' : 'Symbol Table'}
           </button>
 
           <button
@@ -218,6 +254,53 @@ export function App() {
             </div>
           )}
         </div>
+
+        {/* Symbol Table Inspector Drawer */}
+        {isSymbolTableOpen && (
+          <aside className="symbol-drawer">
+            <div className="drawer-header">
+              <h3>Symbol Table Inspector</h3>
+              <button className="close-btn" onClick={() => setIsSymbolTableOpen(false)}>×</button>
+            </div>
+            <div className="drawer-content">
+              <div className="symbol-section">
+                <h4>User Labels ({categorized.labels.length})</h4>
+                {categorized.labels.length === 0 ? <p className="empty-sub">No user labels</p> : (
+                  <table>
+                    <thead><tr><th>Symbol</th><th>ROM Addr</th><th>Hex</th></tr></thead>
+                    <tbody>
+                      {categorized.labels.map(s => (
+                        <tr key={s.name}>
+                          <td>{s.name}</td>
+                          <td>{s.address}</td>
+                          <td>0x{s.address.toString(16).toUpperCase()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div className="symbol-section">
+                <h4>Allocated RAM Variables ({categorized.variables.length})</h4>
+                {categorized.variables.length === 0 ? <p className="empty-sub">No variables allocated</p> : (
+                  <table>
+                    <thead><tr><th>Variable</th><th>RAM Addr</th><th>Hex</th></tr></thead>
+                    <tbody>
+                      {categorized.variables.map(s => (
+                        <tr key={s.name}>
+                          <td>{s.name}</td>
+                          <td>{s.address}</td>
+                          <td>0x{s.address.toString(16).toUpperCase()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </aside>
+        )}
       </main>
     </div>
   );

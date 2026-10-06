@@ -7,6 +7,7 @@ import type { DiagnosticError } from '../types/hack';
 export interface AssembleResult {
   binaryLines: string[];
   diagnostics: DiagnosticError[];
+  symbolTable: Record<string, number>;
 }
 
 export function assembleHackSource(source: string): AssembleResult {
@@ -15,7 +16,7 @@ export function assembleHackSource(source: string): AssembleResult {
   const totalDiagnostics = [...parseDiagnostics, ...ruleDiagnostics];
 
   if (totalDiagnostics.length > 0) {
-    return { binaryLines: [], diagnostics: totalDiagnostics };
+    return { binaryLines: [], diagnostics: totalDiagnostics, symbolTable: {} };
   }
 
   const { symbolTable, executableInstructions } = buildLabelSymbolTable(instructions);
@@ -37,5 +38,5 @@ export function assembleHackSource(source: string): AssembleResult {
     }
   }
 
-  return { binaryLines, diagnostics: [] };
+  return { binaryLines, diagnostics: [], symbolTable: (symbolTable as any).table || symbolTable };
 }
