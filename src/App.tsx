@@ -4,9 +4,12 @@ import type * as MonacoType from 'monaco-editor';
 import { registerHackLanguage } from './editor/hackLanguage';
 import { assembleHackSource } from './core/assembler';
 import { PRELOADED_EXAMPLES } from './core/examples';
+import { VirtualScreen } from './components/VirtualScreen';
+import { SCREEN_START_ADDR, SCREEN_END_ADDR } from './core/screen';
 import './App.css';
 
 const HACK_ROM_CAPACITY = 32768;
+const HACK_RAM_CAPACITY = 32768;
 
 // Helper function to normalize loaded assembly code
 const normalizeAssemblyCode = (rawText: string): string => {
@@ -50,6 +53,9 @@ export function App() {
   const [selectedExampleId, setSelectedExampleId] = useState<string>('default');
   const [isSymbolTableOpen, setIsSymbolTableOpen] = useState<boolean>(false);
   const [copyStatus, setCopyStatus] = useState<string>('Copy Binary');
+
+  // 32K 16-bit RAM buffer (including Screen at 16384-24575 and Keyboard at 24576)
+  const [ram, setRam] = useState<Int16Array>(() => new Int16Array(HACK_RAM_CAPACITY));
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
@@ -142,6 +148,16 @@ export function App() {
       setCopyStatus('Failed to copy');
       setTimeout(() => setCopyStatus('Copy Binary'), 2000);
     }
+  };
+
+  const handleClearScreen = () => {
+    setRam((prevRam) => {
+      const updatedRam = new Int16Array(prevRam);
+      for (let addr = SCREEN_START_ADDR; addr <= SCREEN_END_ADDR; addr++) {
+        updatedRam[addr] = 0;
+      }
+      return updatedRam;
+    });
   };
 
   // Keyboard shortcut Ctrl+S / Cmd+S to export .hack
@@ -303,6 +319,9 @@ export function App() {
               )}
             </div>
           )}
+
+          {/* Virtual Screen Component placed beneath the binary table */}
+          <VirtualScreen ram={ram} onClearScreen={handleClearScreen} />
         </div>
 
         {/* Symbol Table Inspector Drawer */}
