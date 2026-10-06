@@ -13,7 +13,7 @@ import './App.css';
 
 const HACK_ROM_CAPACITY = 32768;
 const HACK_RAM_CAPACITY = 32768;
-const CYCLES_PER_FRAME = 1500;
+const CYCLES_PER_FRAME = 15000; // Increased for smooth full-screen sweeps
 
 const normalizeAssemblyCode = (rawText: string): string => {
   return rawText
@@ -56,8 +56,12 @@ export function App() {
   const [isSymbolTableOpen, setIsSymbolTableOpen] = useState<boolean>(false);
   const [copyStatus, setCopyStatus] = useState<string>('Copy Binary');
 
-  // Emulator State
-  const [ram, setRam] = useState<Int16Array>(() => new Int16Array(HACK_RAM_CAPACITY));
+  // Single persistent hardware RAM buffer
+  const ramRef = useRef<Int16Array>(new Int16Array(HACK_RAM_CAPACITY));
+  // Render trigger tick to update UI without recreating RAM
+  const [tick, setTick] = useState<number>(0);
+  const forceRender = useCallback(() => setTick((t) => (t + 1) | 0), []);
+
   const [cpuState, setCpuState] = useState<CpuState>(createInitialCpuState);
   const [isRunning, setIsRunning] = useState<boolean>(false);
 
@@ -95,6 +99,16 @@ export function App() {
 
     monacoRef.current.editor.setModelMarkers(model, 'hack-linter', markers);
   }, [diagnostics]);
+
+  const handleResetCpu = useCallback(() => {
+    setIsRunning(false);
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    setCpuState(createInitialCpuState());
+    forceRender();
+  }, [forceRender]);
 
   const handleSelectExample = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = e.target.value;
@@ -158,44 +172,32 @@ export function App() {
   };
 
   const handleClearScreen = () => {
-    setRam((prevRam) => {
-      const updated = new Int16Array(prevRam);
-      for (let addr = SCREEN_START_ADDR; addr <= SCREEN_END_ADDR; addr++) {
-        updated[addr] = 0;
-      }
-      return updated;
-    });
+    const ram = ramRef.current;
+    for (let addr = SCREEN_START_ADDR; addr <= SCREEN_END_ADDR; addr++) {
+      ram[addr] = 0;
+    }
+    forceRender();
   };
 
   const handleStepCpu = () => {
     if (binaryLines.length === 0 || diagnostics.length > 0) return;
     setCpuState((prevCpu) => {
-      const updatedRam = new Int16Array(ram);
-      const nextCpu = stepCpu(prevCpu, binaryLines, updatedRam);
-      setRam(updatedRam);
+      const nextCpu = stepCpu(prevCpu, binaryLines, ramRef.current);
+      forceRender();
       return nextCpu;
     });
-  };
-
-  const handleResetCpu = () => {
-    setIsRunning(false);
-    if (animationFrameRef.current !== null) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    setCpuState(createInitialCpuState());
   };
 
   const handleRunToggle = () => {
     setIsRunning((prev) => !prev);
   };
 
-  // Continuous run loop
+  // Continuous run loop operating on the single ramRef buffer
   useEffect(() => {
     if (!isRunning) return;
 
     let localCpu = cpuState;
-    const localRam = new Int16Array(ram);
+    const localRam = ramRef.current;
 
     const runBatch = () => {
       for (let i = 0; i < CYCLES_PER_FRAME; i++) {
@@ -207,7 +209,7 @@ export function App() {
       }
 
       setCpuState(localCpu);
-      setRam(new Int16Array(localRam));
+      forceRender();
 
       if (!localCpu.halted) {
         animationFrameRef.current = requestAnimationFrame(runBatch);
@@ -221,19 +223,17 @@ export function App() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isRunning, binaryLines]);
+  }, [isRunning, binaryLines, forceRender]);
 
-  // Keyboard Event Listener for RAM[24576]
+  // Global Keyboard Event Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Export shortcut
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         handleDownloadHack();
         return;
       }
 
-      // Ignore when user is actively editing text in inputs or Monaco
       const activeTag = (document.activeElement?.tagName || '').toLowerCase();
       const isMonaco = document.activeElement?.closest('.monaco-editor');
       if (activeTag === 'input' || activeTag === 'textarea' || isMonaco) {
@@ -241,13 +241,9 @@ export function App() {
       }
 
       const code = getHackKeyCode(e);
-      if (code !== 0) {
-        setRam((prev) => {
-          if (prev[KBD_ADDR] === code) return prev;
-          const next = new Int16Array(prev);
-          next[KBD_ADDR] = code;
-          return next;
-        });
+      if (code !== 0 && ramRef.current[KBD_ADDR] !== code) {
+        ramRef.current[KBD_ADDR] = code;
+        forceRender();
       }
     };
 
@@ -258,12 +254,10 @@ export function App() {
         return;
       }
 
-      setRam((prev) => {
-        if (prev[KBD_ADDR] === 0) return prev;
-        const next = new Int16Array(prev);
-        next[KBD_ADDR] = 0;
-        return next;
-      });
+      if (ramRef.current[KBD_ADDR] !== 0) {
+        ramRef.current[KBD_ADDR] = 0;
+        forceRender();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -273,7 +267,7 @@ export function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleDownloadHack]);
+  }, [handleDownloadHack, forceRender]);
 
   const romPercentage = ((binaryLines.length / HACK_ROM_CAPACITY) * 100).toFixed(2);
 
@@ -430,7 +424,7 @@ export function App() {
           {/* CPU Debugger */}
           <CpuDebugger
             cpuState={cpuState}
-            ram={ram}
+            ram={ramRef.current}
             isRunning={isRunning}
             onStep={handleStepCpu}
             onRunToggle={handleRunToggle}
@@ -438,11 +432,15 @@ export function App() {
             disabled={diagnostics.length > 0 || binaryLines.length === 0}
           />
 
-          {/* Virtual Screen with Keyboard status */}
-          <VirtualScreen ram={ram} onClearScreen={handleClearScreen} />
+          {/* Virtual Screen Canvas */}
+          <VirtualScreen
+            ram={ramRef.current}
+            renderTrigger={tick}
+            onClearScreen={handleClearScreen}
+          />
         </div>
 
-        {/* Symbol Table Inspector Drawer */}
+        {/* Symbol Table Inspector */}
         {isSymbolTableOpen && (
           <aside className="symbol-drawer">
             <div className="drawer-header">

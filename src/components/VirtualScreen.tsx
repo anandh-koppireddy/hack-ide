@@ -5,10 +5,11 @@ import './VirtualScreen.css';
 
 interface VirtualScreenProps {
   ram: Int16Array;
+  renderTrigger?: number;
   onClearScreen?: () => void;
 }
 
-export const VirtualScreen: React.FC<VirtualScreenProps> = ({ ram, onClearScreen }) => {
+export const VirtualScreen: React.FC<VirtualScreenProps> = ({ ram, renderTrigger, onClearScreen }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const currentKey = ram[KBD_ADDR] || 0;
 
@@ -19,7 +20,7 @@ export const VirtualScreen: React.FC<VirtualScreenProps> = ({ ram, onClearScreen
     if (!ctx) return;
 
     renderScreenMemory(ctx, ram);
-  }, [ram]);
+  }, [ram, renderTrigger]);
 
   const renderKeyDisplay = () => {
     if (currentKey === 0) return 'None';
@@ -37,7 +38,10 @@ export const VirtualScreen: React.FC<VirtualScreenProps> = ({ ram, onClearScreen
           <span className="screen-badge" title="Memory-mapped Screen">
             RAM[16384 - 24575]
           </span>
-          <span className={`kbd-badge ${currentKey !== 0 ? 'active' : ''}`} title="Memory-mapped Keyboard">
+          <span
+            className={`kbd-badge ${currentKey !== 0 ? 'active' : ''}`}
+            title="Memory-mapped Keyboard"
+          >
             KBD: {renderKeyDisplay()}
           </span>
           {onClearScreen && (
@@ -54,6 +58,7 @@ export const VirtualScreen: React.FC<VirtualScreenProps> = ({ ram, onClearScreen
           height={SCREEN_HEIGHT}
           className="hack-canvas"
           tabIndex={0}
+          title="Click to focus virtual display for keyboard input"
         />
       </div>
     </div>
