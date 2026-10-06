@@ -1,0 +1,81 @@
+.cpu-debugger-card {
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.debugger-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.debugger-header h4 {
+  font-size: 0.85rem;
+  color: #ccc;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.debugger-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-warn {
+  background-color: #d18616;
+  color: #fff;
+  border: none;
+}
+
+.btn-warn:hover {
+  background-color: #e09424;
+}
+
+.registers-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.reg-item {
+  background-color: #252526;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: monospace;
+}
+
+.reg-label {
+  font-size: 0.7rem;
+  color: #888;
+  font-weight: 600;
+}
+
+.reg-val {
+  font-size: 0.95rem;
+  color: #4ec9b0;
+  font-weight: bold;
+}
+
+.reg-hex {
+  font-size: 0.65rem;
+  color: #666;
+}
+
+.halted-badge {
+  font-size: 0.75rem;
+  color: #ce9178;
+  text-align: center;
+  font-style: italic;
+  padding-top: 4px;
+}
