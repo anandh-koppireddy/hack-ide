@@ -1,10 +1,12 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import type * as MonacoType from 'monaco-editor';
 import { registerHackLanguage } from './editor/hackLanguage';
 import { assembleHackSource } from './core/assembler';
 import { PRELOADED_EXAMPLES } from './core/examples';
 import './App.css';
+
+const HACK_ROM_CAPACITY = 32768;
 
 // Helper function to normalize loaded assembly code
 const normalizeAssemblyCode = (rawText: string): string => {
@@ -47,6 +49,7 @@ export function App() {
   const [currentFileName, setCurrentFileName] = useState<string>(PRELOADED_EXAMPLES[0].filename);
   const [selectedExampleId, setSelectedExampleId] = useState<string>('default');
   const [isSymbolTableOpen, setIsSymbolTableOpen] = useState<boolean>(false);
+  const [copyStatus, setCopyStatus] = useState<string>('Copy Binary');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
@@ -114,7 +117,7 @@ export function App() {
     e.target.value = '';
   };
 
-  const handleDownloadHack = () => {
+  const handleDownloadHack = useCallback(() => {
     if (binaryLines.length === 0 || diagnostics.length > 0) return;
 
     const binaryContent = binaryLines.join('\n');
@@ -127,7 +130,33 @@ export function App() {
     anchor.download = downloadName;
     anchor.click();
     URL.revokeObjectURL(url);
+  }, [binaryLines, diagnostics, currentFileName]);
+
+  const handleCopyBinary = async () => {
+    if (binaryLines.length === 0 || diagnostics.length > 0) return;
+    try {
+      await navigator.clipboard.writeText(binaryLines.join('\n'));
+      setCopyStatus('Copied!');
+      setTimeout(() => setCopyStatus('Copy Binary'), 2000);
+    } catch {
+      setCopyStatus('Failed to copy');
+      setTimeout(() => setCopyStatus('Copy Binary'), 2000);
+    }
   };
+
+  // Keyboard shortcut Ctrl+S / Cmd+S to export .hack
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleDownloadHack();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleDownloadHack]);
+
+  const romPercentage = ((binaryLines.length / HACK_ROM_CAPACITY) * 100).toFixed(2);
 
   return (
     <div className="ide-container">
@@ -175,10 +204,19 @@ export function App() {
           </button>
 
           <button
+            className="btn btn-secondary"
+            onClick={handleCopyBinary}
+            disabled={diagnostics.length > 0 || binaryLines.length === 0}
+            title="Copy machine code to clipboard"
+          >
+            {copyStatus}
+          </button>
+
+          <button
             className="btn btn-primary"
             onClick={handleDownloadHack}
             disabled={diagnostics.length > 0 || binaryLines.length === 0}
-            title={diagnostics.length > 0 ? 'Fix errors to download .hack binary' : 'Download binary'}
+            title={diagnostics.length > 0 ? 'Fix errors to download .hack binary' : 'Download binary (Ctrl+S)'}
           >
             Export .hack
           </button>
@@ -220,10 +258,22 @@ export function App() {
 
         <div className="preview-pane">
           <div className="preview-header">
-            <h3>Machine Code Preview (.hack)</h3>
-            <span className="instruction-count">
-              {binaryLines.length} {binaryLines.length === 1 ? 'Word' : 'Words'}
-            </span>
+            <div className="preview-header-title">
+              <h3>Machine Code Preview (.hack)</h3>
+              <span className="instruction-count">
+                {binaryLines.length} {binaryLines.length === 1 ? 'Word' : 'Words'}
+              </span>
+            </div>
+
+            <div className="rom-meter-container" title={`ROM Usage: ${binaryLines.length} / ${HACK_ROM_CAPACITY} instructions`}>
+              <span className="rom-meter-label">ROM: {romPercentage}%</span>
+              <div className="rom-progress-bar">
+                <div
+                  className="rom-progress-fill"
+                  style={{ width: `${Math.min(parseFloat(romPercentage), 100)}%` }}
+                />
+              </div>
+            </div>
           </div>
 
           {diagnostics.length > 0 ? (

@@ -288,3 +288,43 @@ html, body, #root {
   color: #666;
   font-style: italic;
 }
+
+/* ROM Usage Meter Styles */
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preview-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rom-meter-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rom-meter-label {
+  font-size: 0.75rem;
+  color: #888;
+  font-family: monospace;
+}
+
+.rom-progress-bar {
+  width: 90px;
+  height: 6px;
+  background-color: #2d2d2d;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid #444;
+}
+
+.rom-progress-fill {
+  height: 100%;
+  background-color: #4ec9b0;
+  transition: width 0.2s ease-in-out;
+}
