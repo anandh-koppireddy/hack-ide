@@ -19,24 +19,51 @@ export function assembleHackSource(source: string): AssembleResult {
     return { binaryLines: [], diagnostics: totalDiagnostics, symbolTable: {} };
   }
 
-  const { symbolTable, executableInstructions } = buildLabelSymbolTable(instructions);
+  const symbolTable = buildLabelSymbolTable(instructions);
   const binaryLines: string[] = [];
 
-  for (const inst of executableInstructions) {
-    if (inst.type === 'A_INSTRUCTION') {
+  for (const inst of instructions) {
+    const raw = inst as any;
+
+    const isAInstruction =
+      raw.type === 'A_INSTRUCTION' ||
+      raw.type === 'A_COMMAND' ||
+      raw.instructionType === 'A_COMMAND';
+
+    const isCInstruction =
+      raw.type === 'C_INSTRUCTION' ||
+      raw.type === 'C_COMMAND' ||
+      raw.instructionType === 'C_COMMAND';
+
+    if (isAInstruction) {
+      const rawIdentifier = raw.symbol ?? raw.value ?? raw.address;
       let numericAddress: number;
 
-      if (inst.isSymbol) {
-        numericAddress = symbolTable.resolveOrAllocateVariable(inst.value);
+      if (rawIdentifier !== undefined && rawIdentifier !== null) {
+        // Strip '@' if the parser retained it
+        const strVal = String(rawIdentifier).replace(/^@/, '').trim();
+        const parsedNum = Number(strVal);
+
+        if (!isNaN(parsedNum)) {
+          numericAddress = parsedNum;
+        } else if (symbolTable.contains(strVal)) {
+          numericAddress = symbolTable.getAddress(strVal);
+        } else {
+          numericAddress = symbolTable.getOrAllocateVariable(strVal);
+        }
       } else {
-        numericAddress = inst.numericValue!;
+        numericAddress = 0;
       }
 
       binaryLines.push(compileAInstruction(numericAddress));
-    } else if (inst.type === 'C_INSTRUCTION') {
-      binaryLines.push(compileCInstruction(inst.comp, inst.dest, inst.jump));
+    } else if (isCInstruction) {
+      binaryLines.push(compileCInstruction(raw.comp, raw.dest, raw.jump));
     }
   }
 
-  return { binaryLines, diagnostics: [], symbolTable: (symbolTable as any).table || symbolTable };
+  return {
+    binaryLines,
+    diagnostics: totalDiagnostics,
+    symbolTable: symbolTable.getTable(),
+  };
 }

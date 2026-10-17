@@ -1,7 +1,8 @@
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// https://vite.dev/config/
+// Replace 'hack-ide' with your exact repo name if different
 export default defineConfig({
   plugins: [react()],
-})
+  base: '/hack-ide/',
+});

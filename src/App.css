@@ -328,3 +328,30 @@ html, body, #root {
   background-color: #4ec9b0;
   transition: width 0.2s ease-in-out;
 }
+
+/* Test Status Verification Banner */
+.test-status-banner {
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-bottom: 1px solid #333;
+}
+
+.test-status-banner.passed {
+  background: rgba(46, 160, 67, 0.15);
+  color: #3fb950;
+  border-left: 3px solid #3fb950;
+}
+
+.test-status-banner.failed {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+  border-left: 3px solid #f85149;
+}
+
+.status-icon {
+  font-weight: 700;
+}

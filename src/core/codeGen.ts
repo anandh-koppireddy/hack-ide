@@ -57,11 +57,12 @@ const JUMP_TABLE: Record<string, string> = {
   'JMP': '111',
 };
 
-export function to15BitBinary(value: number): string {
-  return value.toString(2).padStart(15, '0');
+export function to15BitBinary(value: number | string): string {
+  const numericVal = Number(value) || 0;
+  return (numericVal & 0x7fff).toString(2).padStart(15, '0');
 }
 
-export function compileAInstruction(address: number): string {
+export function compileAInstruction(address: number | string): string {
   return `0${to15BitBinary(address)}`;
 }
 

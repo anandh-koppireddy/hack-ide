@@ -1,0 +1,91 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modal-card {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #61afef;
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  font-size: 0.9rem;
+  color: #abb2bf;
+  line-height: 1.5;
+}
+
+.doc-section {
+  margin-bottom: 1.5rem;
+}
+
+.doc-section h3 {
+  color: #e5c07b;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+.doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+
+.doc-table th, .doc-table td {
+  border: 1px solid #333;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.doc-table th {
+  background: #252526;
+  color: #98c379;
+}
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.doc-grid ul {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0 0 0;
+}
+
+.doc-grid code, .doc-section code {
+  background: #282c34;
+  color: #98c379;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: 'Fira Code', monospace;
+}

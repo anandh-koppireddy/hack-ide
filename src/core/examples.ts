@@ -2,112 +2,132 @@ export interface HackExample {
   id: string;
   name: string;
   filename: string;
-  description: string;
   code: string;
+  expectedBinary?: string[];
 }
 
 export const PRELOADED_EXAMPLES: HackExample[] = [
   {
-    id: 'default',
-    name: 'Simple Arithmetic (Default)',
-    filename: 'default.asm',
-    description: 'Basic arithmetic demonstrating A-instructions and C-instructions.',
-    code: `// Example Hack Assembly Program
-@2
-D=A
-@3
-D=D+A
-@0
-M=D
-(INFINITE_LOOP)
-@INFINITE_LOOP
-0;JMP
-`,
-  },
-  {
     id: 'add',
-    name: 'Add.asm (Nand2Tetris Benchmark)',
+    name: 'Add.asm (Basic Arithmetic)',
     filename: 'Add.asm',
-    description: 'Computes R0 = 2 + 3 using RAM and register operations.',
     code: `// Computes R0 = 2 + 3
-// (R0 refers to RAM[0])
-
 @2
 D=A
 @3
 D=D+A
 @0
-M=D
-`,
+M=D`,
+    expectedBinary: [
+      '0000000000000010',
+      '1110110000010000',
+      '0000000000000011',
+      '1110000010010000',
+      '0000000000000000',
+      '1110001100001000'
+    ]
   },
   {
     id: 'max',
-    name: 'Max.asm (Branching & Comparison)',
+    name: 'Max.asm (Conditional Branching)',
     filename: 'Max.asm',
-    description: 'Computes R2 = max(R0, R1) using conditional jumps.',
     code: `// Computes R2 = max(R0, R1)
-// (R0, R1, R2 refer to RAM[0], RAM[1], and RAM[2])
-
    @R0
-   D=M              // D = first number
+   D=M
    @R1
-   D=D-M            // D = first number - second number
+   D=D-M
    @OUTPUT_FIRST
-   D;JGT            // If D>0 (first is greater) goto output_first
+   D;JGT
    @R1
-   D=M              // D = second number
+   D=M
    @OUTPUT_D
-   0;JMP            // Goto output_d
+   0;JMP
 (OUTPUT_FIRST)
    @R0
-   D=M              // D = first number
+   D=M
 (OUTPUT_D)
    @R2
-   M=D              // M[2] = max(first, second)
+   M=D
 (INFINITE_LOOP)
    @INFINITE_LOOP
-   0;JMP            // Infinite loop to terminate
-`,
+   0;JMP`,
+    expectedBinary: [
+      '0000000000000000',
+      '1111110000010000',
+      '0000000000000001',
+      '1111010011010000',
+      '0000000000001010',
+      '1110001100000001',
+      '0000000000000001',
+      '1111110000010000',
+      '0000000000001100',
+      '1110101010000111',
+      '0000000000000000',
+      '1111110000010000',
+      '0000000000000010',
+      '1110001100001000',
+      '0000000000001110',
+      '1110101010000111'
+    ]
   },
   {
-    id: 'rectangle',
-    name: 'Rectangle.asm (Screen I/O)',
+    id: 'rect',
+    name: 'Rectangle.asm (Loop & Memory)',
     filename: 'Rectangle.asm',
-    description: 'Draws a filled rectangle of width 16 pixels and height R0 on the screen.',
-    code: `// Draws a filled rectangle of 16 pixels width and R0 rows height at the top-left of the screen.
-
+    code: `// Draws a 16-pixel-wide rectangle of height R0 on the screen
    @R0
    D=M
    @INFINITE_LOOP
-   D;JLE            // If height <= 0 goto INFINITE_LOOP
-
+   D;JLE
    @counter
-   M=D              // counter = R0
+   M=D
    @SCREEN
    D=A
    @address
-   M=D              // address = 16384 (base address of Hack screen memory)
-
+   M=D
 (LOOP)
    @address
    A=M
-   M=-1             // Draw 16 black pixels: RAM[address] = -1 (1111111111111111)
-
+   M=-1
    @address
    D=M
    @32
    D=D+A
    @address
-   M=D              // address = address + 32 (next row in screen memory)
-
+   M=D
    @counter
-   MD=M-1           // counter = counter - 1
+   MD=M-1
    @LOOP
-   D;JGT            // If counter > 0 goto LOOP
-
+   D;JGT
 (INFINITE_LOOP)
    @INFINITE_LOOP
-   0;JMP            // Infinite loop
-`,
-  },
+   0;JMP`,
+    expectedBinary: [
+      '0000000000000000', // @R0
+      '1111110000010000', // D=M
+      '0000000000010111', // @INFINITE_LOOP (ROM[23])
+      '1110001100000110', // D;JLE
+      '0000000000010000', // @counter (RAM[16])
+      '1110001100001000', // M=D
+      '0100000000000000', // @SCREEN (16384)
+      '1110110000010000', // D=A
+      '0000000000010001', // @address (RAM[17])
+      '1110001100001000', // M=D
+      '0000000000010001', // @address
+      '1111110000100000', // A=M
+      '1110111010001000', // M=-1
+      '0000000000010001', // @address
+      '1111110000010000', // D=M
+      '0000000000100000', // @32
+      '1110000010010000', // D=D+A
+      '0000000000010001', // @address
+      '1110001100001000', // M=D
+      '0000000000010000', // @counter
+      '1111110010011000', // MD=M-1
+      '0000000000001010', // @LOOP (ROM[10])
+      '1110001100000001', // D;JGT
+      '0000000000010111', // @INFINITE_LOOP (ROM[23])
+      '1110101010000111'  // 0;JMP
+    ]
+  }
 ];

@@ -4,11 +4,57 @@ import type * as MonacoType from 'monaco-editor';
 import { registerHackLanguage } from './editor/hackLanguage';
 import { assembleHackSource } from './core/assembler';
 import { PRELOADED_EXAMPLES } from './core/examples';
+import { DocsModal } from './components/DocsModal';
+import { SymbolTableInspector } from './components/SymbolTableInspector';
 import './App.css';
+
+export interface CategorizedSymbol {
+  name: string;
+  address: number;
+  type: 'label' | 'variable' | 'predefined';
+}
 
 const HACK_ROM_CAPACITY = 32768;
 
-// Helper function to normalize loaded assembly code
+const PREDEFINED_SYMBOLS = new Set([
+  'SP', 'LCL', 'ARG', 'THIS', 'THAT',
+  'SCREEN', 'KBD',
+  'R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7',
+  'R8', 'R9', 'R10', 'R11', 'R12', 'R13', 'R14', 'R15'
+]);
+
+const parseAllSymbols = (rawTable: any): CategorizedSymbol[] => {
+  if (!rawTable) return [];
+
+  const table: Record<string, number> =
+    typeof rawTable.getTable === 'function'
+      ? rawTable.getTable()
+      : rawTable.symbols && typeof rawTable.symbols === 'object'
+      ? rawTable.symbols
+      : rawTable;
+
+  const result: CategorizedSymbol[] = [];
+
+  for (const [name, address] of Object.entries(table)) {
+    if (typeof address !== 'number' || name === 'nextVariableAddress' || name === 'symbols') {
+      continue;
+    }
+
+    let type: 'label' | 'variable' | 'predefined' = 'variable';
+    if (PREDEFINED_SYMBOLS.has(name)) {
+      type = 'predefined';
+    } else if (address < 16) {
+      type = 'label';
+    } else {
+      type = 'variable';
+    }
+
+    result.push({ name, address, type });
+  }
+
+  return result;
+};
+
 const normalizeAssemblyCode = (rawText: string): string => {
   return rawText
     .replace(/\r\n/g, '\n')
@@ -18,39 +64,14 @@ const normalizeAssemblyCode = (rawText: string): string => {
     .join('\n');
 };
 
-// Helper function to categorize symbols for the drawer
-const categorizeSymbols = (symbolTable: Record<string, number>) => {
-  const predefined: { name: string; address: number }[] = [];
-  const labels: { name: string; address: number }[] = [];
-  const variables: { name: string; address: number }[] = [];
-
-  const predefinedNames = new Set([
-    'SP', 'LCL', 'ARG', 'THIS', 'THAT',
-    'SCREEN', 'KBD',
-    'R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7',
-    'R8', 'R9', 'R10', 'R11', 'R12', 'R13', 'R14', 'R15'
-  ]);
-
-  Object.entries(symbolTable || {}).forEach(([name, address]) => {
-    if (predefinedNames.has(name)) {
-      predefined.push({ name, address });
-    } else if (address >= 16) {
-      variables.push({ name, address });
-    } else {
-      labels.push({ name, address });
-    }
-  });
-
-  return { predefined, labels, variables };
-};
-
 export function App() {
   const [sourceCode, setSourceCode] = useState<string>(PRELOADED_EXAMPLES[0].code);
   const [currentFileName, setCurrentFileName] = useState<string>(PRELOADED_EXAMPLES[0].filename);
-  const [selectedExampleId, setSelectedExampleId] = useState<string>('default');
+  const [selectedExampleId, setSelectedExampleId] = useState<string>('add');
   const [isSymbolTableOpen, setIsSymbolTableOpen] = useState<boolean>(false);
+  const [isDocsOpen, setIsDocsOpen] = useState<boolean>(false);
   const [copyStatus, setCopyStatus] = useState<string>('Copy Binary');
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<MonacoType.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof MonacoType | null>(null);
@@ -59,14 +80,33 @@ export function App() {
     return assembleHackSource(sourceCode);
   }, [sourceCode]);
 
-  const categorized = useMemo(() => {
-    return categorizeSymbols(symbolTable || {});
+  const parsedSymbols = useMemo(() => {
+    return parseAllSymbols(symbolTable || {});
   }, [symbolTable]);
 
-  // Synchronize diagnostics with Monaco In-Editor Markers
+  const currentExample = useMemo(() => {
+    return PRELOADED_EXAMPLES.find((ex) => ex.id === selectedExampleId);
+  }, [selectedExampleId]);
+
+  const testStatus = useMemo(() => {
+    if (!currentExample?.expectedBinary || diagnostics.length > 0) return null;
+    if (binaryLines.length !== currentExample.expectedBinary.length) {
+      return {
+        passed: false,
+        message: `Length mismatch: ${binaryLines.length} vs expected ${currentExample.expectedBinary.length}`,
+      };
+    }
+    const mismatchIdx = binaryLines.findIndex(
+      (line, i) => line !== currentExample.expectedBinary![i]
+    );
+    if (mismatchIdx !== -1) {
+      return { passed: false, message: `Mismatch at ROM[${mismatchIdx}]` };
+    }
+    return { passed: true, message: '100% Matches Reference .cmp Binary' };
+  }, [currentExample, binaryLines, diagnostics]);
+
   useEffect(() => {
     if (!monacoRef.current || !editorRef.current) return;
-
     const model = editorRef.current.getModel();
     if (!model) return;
 
@@ -109,8 +149,7 @@ export function App() {
     reader.onload = (event) => {
       const content = event.target?.result as string;
       if (content !== undefined) {
-        const cleanedCode = normalizeAssemblyCode(content);
-        setSourceCode(cleanedCode);
+        setSourceCode(normalizeAssemblyCode(content));
       }
     };
     reader.readAsText(file);
@@ -119,12 +158,10 @@ export function App() {
 
   const handleDownloadHack = useCallback(() => {
     if (binaryLines.length === 0 || diagnostics.length > 0) return;
-
     const binaryContent = binaryLines.join('\n');
     const blob = new Blob([binaryContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const downloadName = currentFileName.replace(/\.asm$/i, '') + '.hack';
-
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = downloadName;
@@ -144,17 +181,19 @@ export function App() {
     }
   };
 
-  // Keyboard shortcut Ctrl+S / Cmd+S to export .hack
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        handleDownloadHack();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleDownloadHack]);
+  const handleJumpToSymbol = (symbolName: string) => {
+    if (!editorRef.current) return;
+    const model = editorRef.current.getModel();
+    if (!model) return;
+
+    const matches = model.findMatches(symbolName, true, false, true, null, true);
+    if (matches.length > 0) {
+      const target = matches[0].range;
+      editorRef.current.revealRangeInCenter(target);
+      editorRef.current.setSelection(target);
+      editorRef.current.focus();
+    }
+  };
 
   const romPercentage = ((binaryLines.length / HACK_ROM_CAPACITY) * 100).toFixed(2);
 
@@ -162,7 +201,7 @@ export function App() {
     <div className="ide-container">
       <header className="ide-header">
         <div className="header-left">
-          <h1>Hack Assembly IDE & Linter</h1>
+          <h1>Hack Assembly IDE & Assembler</h1>
           <span className="file-badge">{currentFileName}</span>
 
           <div className="dropdown-container">
@@ -196,6 +235,10 @@ export function App() {
             Open File (.asm)
           </button>
 
+          <button className="btn btn-secondary" onClick={() => setIsDocsOpen(true)}>
+            Cheatsheet / Docs
+          </button>
+
           <button
             className="btn btn-secondary"
             onClick={() => setIsSymbolTableOpen(!isSymbolTableOpen)}
@@ -207,7 +250,6 @@ export function App() {
             className="btn btn-secondary"
             onClick={handleCopyBinary}
             disabled={diagnostics.length > 0 || binaryLines.length === 0}
-            title="Copy machine code to clipboard"
           >
             {copyStatus}
           </button>
@@ -216,7 +258,6 @@ export function App() {
             className="btn btn-primary"
             onClick={handleDownloadHack}
             disabled={diagnostics.length > 0 || binaryLines.length === 0}
-            title={diagnostics.length > 0 ? 'Fix errors to download .hack binary' : 'Download binary (Ctrl+S)'}
           >
             Export .hack
           </button>
@@ -265,7 +306,10 @@ export function App() {
               </span>
             </div>
 
-            <div className="rom-meter-container" title={`ROM Usage: ${binaryLines.length} / ${HACK_ROM_CAPACITY} instructions`}>
+            <div
+              className="rom-meter-container"
+              title={`ROM Usage: ${binaryLines.length} / ${HACK_ROM_CAPACITY} instructions`}
+            >
               <span className="rom-meter-label">ROM: {romPercentage}%</span>
               <div className="rom-progress-bar">
                 <div
@@ -275,6 +319,13 @@ export function App() {
               </div>
             </div>
           </div>
+
+          {testStatus && (
+            <div className={`test-status-banner ${testStatus.passed ? 'passed' : 'failed'}`}>
+              <span className="status-icon">{testStatus.passed ? '✓' : '✗'}</span>
+              <span>{testStatus.message}</span>
+            </div>
+          )}
 
           {diagnostics.length > 0 ? (
             <div className="diagnostics-panel">
@@ -305,53 +356,15 @@ export function App() {
           )}
         </div>
 
-        {/* Symbol Table Inspector Drawer */}
-        {isSymbolTableOpen && (
-          <aside className="symbol-drawer">
-            <div className="drawer-header">
-              <h3>Symbol Table Inspector</h3>
-              <button className="close-btn" onClick={() => setIsSymbolTableOpen(false)}>×</button>
-            </div>
-            <div className="drawer-content">
-              <div className="symbol-section">
-                <h4>User Labels ({categorized.labels.length})</h4>
-                {categorized.labels.length === 0 ? <p className="empty-sub">No user labels</p> : (
-                  <table>
-                    <thead><tr><th>Symbol</th><th>ROM Addr</th><th>Hex</th></tr></thead>
-                    <tbody>
-                      {categorized.labels.map(s => (
-                        <tr key={s.name}>
-                          <td>{s.name}</td>
-                          <td>{s.address}</td>
-                          <td>0x{s.address.toString(16).toUpperCase()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              <div className="symbol-section">
-                <h4>Allocated RAM Variables ({categorized.variables.length})</h4>
-                {categorized.variables.length === 0 ? <p className="empty-sub">No variables allocated</p> : (
-                  <table>
-                    <thead><tr><th>Variable</th><th>RAM Addr</th><th>Hex</th></tr></thead>
-                    <tbody>
-                      {categorized.variables.map(s => (
-                        <tr key={s.name}>
-                          <td>{s.name}</td>
-                          <td>{s.address}</td>
-                          <td>0x{s.address.toString(16).toUpperCase()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </aside>
-        )}
+        <SymbolTableInspector
+          isOpen={isSymbolTableOpen}
+          onClose={() => setIsSymbolTableOpen(false)}
+          symbols={parsedSymbols}
+          onSelectSymbol={handleJumpToSymbol}
+        />
       </main>
+
+      <DocsModal isOpen={isDocsOpen} onClose={() => setIsDocsOpen(false)} />
     </div>
   );
 }
